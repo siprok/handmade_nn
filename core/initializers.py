@@ -18,7 +18,7 @@ class He(Initializer):
 
 
 class Xavier(Initializer):
-@staticmethod
+    @staticmethod
     def initialize(cur_neurons: int, next_neurons: int) -> np.ndarray:
         assert cur_neurons * next_neurons > 0
         sacle = 2 * np.sqrt(6) / (cur_neurons + next_neurons)
