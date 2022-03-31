@@ -1,9 +1,11 @@
 import numpy as np
-from typing import Callable, Sequence
 from abc import ABC, abstractmethod
 
     
 class Optimizer(ABC):
     @abstractmethod
-    def optimize(self):
+    def optimize(self, weights_matrix: np.ndarray, error_der_matrix: np.ndarray):
+        pass
+    @abstractmethod
+    def reboot(self):
         pass

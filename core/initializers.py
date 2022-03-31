@@ -1,25 +1,24 @@
 import numpy as np
-from typing import Callable, Sequence
 from abc import ABC, abstractmethod
 
 
 class Initializer(ABC):
     @abstractmethod
     @staticmethod
-    def initialize(cur_neurons: int, next_neurons: int) -> np.ndarray:
+    def initialize(prev_neurons: int, cur_neurons: int, next_neurons: int) -> np.ndarray:
         pass
 
 
 class He(Initializer):
     @staticmethod
-    def initialize(cur_neurons: int, next_neurons: int = 0) -> np.ndarray:
-        assert cur_neurons > 0
-        return np.random.normal(scale=2 / cur_neurons, size=cur_neurons)
+    def initialize(prev_neurons: int, cur_neurons: int, next_neurons: int = 0) -> np.ndarray:
+        assert prev_neurons * cur_neurons > 0
+        return np.random.normal(scale=2 / cur_neurons, size=(prev_neurons, cur_neurons))
 
 
 class Xavier(Initializer):
     @staticmethod
-    def initialize(cur_neurons: int, next_neurons: int) -> np.ndarray:
-        assert cur_neurons * next_neurons > 0
+    def initialize(prev_neurons: int, cur_neurons: int, next_neurons: int) -> np.ndarray:
+        assert prev_neurons * cur_neurons * next_neurons > 0
         sacle = 2 * np.sqrt(6) / (cur_neurons + next_neurons)
-        return (np.random.random(size=cur_neurons) - 0.5) * scale
+        return (np.random.random(size=(prev_neurons, cur_neurons)) - 0.5) * scale
