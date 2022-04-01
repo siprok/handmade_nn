@@ -1,4 +1,5 @@
 import numpy as np
+import pdb
 from abc import ABC, abstractmethod
 
 
@@ -35,18 +36,20 @@ class Tanh(Activation):
 class Softmax(Activation):
     @staticmethod
     def calc(inputs: np.ndarray) -> np.ndarray:
+        # pdb.set_trace()
         powered = np.exp(inputs)
         return powered / powered.sum()
     @staticmethod
     def error_back_prop(outputs: np.ndarray, error_grad: np.ndarray) -> np.ndarray:
         assert len(outputs.shape) == 2 and outputs.shape[1] == 1 and np.array_equal(outputs.shape, error_grad.shape) 
         size = outputs.shape[0]
+        # pdb.set_trace()
         der_matrix = np.empty(shape=(size, size), dtype=np.float32)
-        der_matrix[range(size), range(size)] = outputs - np.power(outputs, 2)
+        der_matrix[range(size), range(size)] = (outputs - np.power(outputs, 2))[:, 0]
         rows, columns = np.triu_indices(n=size, k=1)
         triag_der_values = - outputs[rows] * outputs[columns]
-        der_matrix[rows, columns] = triag_der_values
-        der_matrix[columns, rows] = triag_der_values
+        der_matrix[rows, columns] = triag_der_values[:,0]
+        der_matrix[columns, rows] = triag_der_values[:,0]
         return der_matrix.dot(error_grad)
 
 class Linear(Activation):

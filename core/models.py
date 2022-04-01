@@ -6,6 +6,7 @@ from .initializers import Initializer
 from .optimizers import Optimizer
 from .layers import Layer, Dense
 from .losses import Loss
+import pdb
 
 
 class Model(ABC):
@@ -42,8 +43,9 @@ class MNISTDense(Model):
                                                             activations_classes)):
             self.layers.append(
                 Dense(
+                    order_ind=i,
                     size=size,
-                    prev_size=layers_sizes[i-1] + 1 if i > 0 else input_size,
+                    prev_size=layers_sizes[i-1] + 1 if i > 0 else input_size +1,
                     next_size=layers_sizes[i+1] if i + 1 < len(layers_sizes) else 0,
                     initializer_class=initializer,
                     activation_class=activator,
@@ -57,13 +59,13 @@ class MNISTDense(Model):
             layers_inputs = np.empty((max(self.layers_sizes + [self.input_size]) + 1, len(self.layers) + 1), dtype=np.float32)
             layers_inputs[self.layers_sizes, range(len(self.layers_sizes))] = 1  # значения входов для смещения
             layers_inputs[:self.input_size, 0] = sample.reshape((1,-1))
-            for j, (layer, cur_size, next_size) in enumerate(zip(self.layers, self.layers_sizes, self.layers_sizes[1:] + [self.layers_sizes[-1]] )): # распространение вперёд
-                layers_inputs[:next_size, j + 1] = layer.forward(layers_inputs[:cur_size, j].reshape((1,-1)))
+            for j, (layer, input_size, output_size) in enumerate(zip(self.layers, [self.input_size] + self.layers_sizes[:-1], self.layers_sizes )): # распространение вперёд
+                layers_inputs[:output_size, j + 1] = layer.forward(layers_inputs[:input_size+1, j].reshape((1,-1)))
             output = layers_inputs[:self.layers_sizes[-1], -1]
             losses[i] = self.loss.calc(output, target)
             error_grad = self.loss.grad(output, target)
-            for j, (layer, inp_size) in enumerate(zip(self.layers[::-1], self.layers_sizes[-2::-1] + [self.layers_sizes[0]])): # распространение назад
-                inputs = layers_inputs[: inp_size + 1, -(j+2)]
+            for j, (layer, inp_size) in enumerate(zip(self.layers[::-1], self.layers_sizes[-2::-1] + [self.input_size])): # распространение назад
+                inputs = layers_inputs[: inp_size + 1, -(j+2)].reshape((1,-1))
                 error_grad = layer.backward(inputs, error_grad)
         return losses
 
