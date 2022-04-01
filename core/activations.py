@@ -4,11 +4,9 @@ from abc import ABC, abstractmethod
 
 class Activation(ABC):
     @abstractmethod
-    @staticmethod
     def calc(inputs: np.ndarray) -> np.ndarray:
         pass
     @abstractmethod
-    @staticmethod
     def error_back_prop(outputs: np.ndarray, error_grad: np.ndarray) -> np.ndarray:
         pass
         

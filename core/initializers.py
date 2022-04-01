@@ -4,7 +4,6 @@ from abc import ABC, abstractmethod
 
 class Initializer(ABC):
     @abstractmethod
-    @staticmethod
     def initialize(prev_neurons: int, cur_neurons: int, next_neurons: int) -> np.ndarray:
         pass
 

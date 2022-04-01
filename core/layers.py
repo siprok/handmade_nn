@@ -33,7 +33,7 @@ class Dense(Layer):
     def forward(self, inputs: np.ndarray) -> np.ndarray:
         """inputs: np.ndarray (1, n_input)"""
         assert len(inputs.shape) == 2 and inputs.shape[0] == 1
-        return self.activation((inputs * self.weights).sum(axis=0))
+        return self.activation.calc((inputs * self.weights).sum(axis=0))
         
 
     def backward(self, inputs: np.ndarray, error_grad: np.ndarray) -> np.ndarray:
