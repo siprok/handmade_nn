@@ -18,6 +18,6 @@ class He(Initializer):
 class Xavier(Initializer):
     @staticmethod
     def initialize(prev_neurons: int, cur_neurons: int, next_neurons: int) -> np.ndarray:
-        assert prev_neurons * cur_neurons * next_neurons > 0
+        assert prev_neurons  * cur_neurons > 0 and next_neurons >= 0
         scale = 2 * np.sqrt(6) / (cur_neurons + next_neurons)
         return (np.random.random(size=(prev_neurons, cur_neurons)) - 0.5) * scale

@@ -14,13 +14,15 @@ class Loss(ABC):
 
 class Crossentropy(Loss):
     def calc(prediction: np.ndarray, target: np.ndarray) -> np.float32:
-        ind = np.argwhere(target.flatten() > 0)[0,0]
-        return -np.log(prediction[ind])
+        """prediction.shape == (batch_size, layer_size)"""
+        indxs = range(prediction.shape[0])
+        return -np.log(prediction[indxs, target]).sum()
 
     def grad(outputs: np.ndarray, target: np.ndarray) -> np.ndarray:
-        """outputs (1, n_classes) target (1, n_classes)"""
-        # pdb.set_trace()
-        ind = np.argwhere(target.flatten() > 0)[0,0]
-        error = np.zeros((outputs.size, 1))
-        error[ind] =  - 1 / outputs[ind]
+        """outputs.shape == (batch_size, n_classes) target.shape == (batch_size, 1)
+            return (batch_size, n_neurons)
+        """
+        indxs = np.arange(outputs.shape[0])
+        error = np.zeros((outputs.shape[0], outputs.shape[1]))
+        error[indxs, target] =  - 1 / outputs[indxs, target]
         return error
