@@ -49,6 +49,5 @@ class Dense(Layer):
         error_der_matrix = inputs.T.dot(error_grad)
         # Произведем шаг оптимизации весов по найенным производным
         self.weights = self.optimizer.optimize(self.weights, error_der_matrix)
-        print(f"weights min {self.weights.min()} max {self.weights.max()}")
         # Вернем градиент ошибки по выходам предыдущего слоя
         return grad_by_prev_layer

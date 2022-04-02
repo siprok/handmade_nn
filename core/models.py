@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from .optimizers import Optimizer
 from .layers import Dense
 from .losses import Loss
-import pdb
+from tqdm import tqdm
 
 
 class Model(ABC):
@@ -55,32 +55,28 @@ class MNISTDense(Model):
     def fit(self, epoch: int, batch_size: int,  train_samples: np.ndarray, train_targets: np.ndarray):
         epoch_size = train_targets.shape[0]  # количество элементов из обучающей выборки наодной эпохе обучения
         losses = np.empty((epoch, train_targets.shape[0] // batch_size), dtype=np.float32)  #  накопитель значения функции потерь по пакетам на эпохах обучения
-        layers_inputs = np.empty((batch_size,
-                                  len(self.layers) + 1,
-                                  max(self.layers_sizes + [self.input_size]) + 1),
-                                 dtype=np.float32)  # накопитель значений входов слоев сети (batch_size, n_layers + 1, layer_size)
-        layers_inputs[:, range(len(self.layers_sizes)), self.layers_sizes] = 1  # значения входов для смещения
-        for e in range(epoch): # итерации по эпохам
+        print("By epoch progress")
+        for e in tqdm(range(epoch)): # итерации по эпохам
             order = np.arange(epoch_size)
             np.random.shuffle(order) # перемещаем элементы обучающей выборки
             for i, start in enumerate(range(0, epoch_size, batch_size)):  # итерируемся по пакетам
+                a_layers_inputs = [] # накопитель значений входов слоев сети (batch_size, n_layers + 1, layer_size)
                 stop = start + batch_size 
                 batch_indxs = order[start: stop]
                 if batch_indxs.size < batch_size:
                     continue
                 samples = train_samples[batch_indxs]  # входные значения пакета
                 targets = train_targets[batch_indxs]  # целевые значения пакета
-                layers_inputs[:, 0, :self.input_size] = samples  # установим входные значения для первого слоя
-                for j, (layer, input_size, output_size)\
-                    in enumerate(zip(self.layers, [self.input_size] + self.layers_sizes[:-1], self.layers_sizes )): # распространение вперёд
-                    layers_inputs[:, j + 1, :output_size] = layer.forward(layers_inputs[:, j, :input_size + 1])
-                output = layers_inputs[:, -1, :self.layers_sizes[-1]]
+                a_layers_inputs.append(add_unit_h(samples))  # установим входные значения для первого слоя
+                
+                for j, layer in enumerate(self.layers): # распространение вперёд
+                    a_layers_inputs.append(add_unit_h(layer.forward(a_layers_inputs[j])))
+                output = a_layers_inputs[-1][:, :-1]
                 losses[e, i] = self.loss.calc(output, targets)
                 error_grad = self.loss.grad(output, targets)
-                for j, (layer, inp_size, out_size)\
-                     in enumerate(zip(self.layers[::-1], self.layers_sizes[-2::-1] + [self.input_size], self.layers_sizes[::-1])): # распространение назад
-                    inputs = layers_inputs[:, -(j+2), :inp_size + 1]
-                    outputs = layers_inputs[:, -(j+1), :out_size + 1]
+                for j, layer in enumerate(self.layers[::-1]): # распространение назад
+                    inputs = a_layers_inputs[-(j+2)]
+                    outputs = a_layers_inputs[-(j+1)]
                     error_grad = layer.backward(inputs=inputs, outputs=outputs, error_grad=error_grad)
         return losses
 
@@ -89,3 +85,8 @@ class MNISTDense(Model):
         for layer in self.layers: # распространение вперёд
             output = layer.forward(samples)
         return output 
+    
+
+def add_unit_h(source: np.ndarray):
+    size = source.shape[0]
+    return np.hstack((source, np.ones((size, 1))))

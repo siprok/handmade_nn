@@ -1,6 +1,6 @@
 import numpy as np
 from abc import ABC, abstractmethod
-import pdb
+from numba import njit
 
 
 class Loss(ABC):
@@ -15,9 +15,8 @@ class Loss(ABC):
 class Crossentropy(Loss):
     def calc(prediction: np.ndarray, target: np.ndarray) -> np.float32:
         """prediction.shape == (batch_size, layer_size)"""
-        indxs = range(prediction.shape[0])
-        return -np.log(prediction[indxs, target]).sum()
-
+        indxs = np.arange(prediction.shape[0])
+        return -np.log(prediction[indxs, target]).sum() / indxs.size
     def grad(outputs: np.ndarray, target: np.ndarray) -> np.ndarray:
         """outputs.shape == (batch_size, n_classes) target.shape == (batch_size, 1)
             return (batch_size, n_neurons)
