@@ -45,13 +45,28 @@ class Adagrad(OptimizerWithState):
     
     def optimize(self, weights_matrix: np.ndarray, error_der_matrix: np.ndarray):
         assert np.array_equal(weights_matrix.shape, error_der_matrix.shape)
-        result = weights_matrix - self.lr / np.sqrt(self.accum + self.eps) * error_der_matrix
+        
         self.accum += np.power(error_der_matrix, 2)
+        result = weights_matrix - self.lr / np.sqrt(self.accum + self.eps) * error_der_matrix
         return result
 
     def reboot(self):
         self.accum = np.zeros_like(self.accum)
 
 
+class RMSProp(OptimizerWithState):
+    def __init__(self, learning_rate: np.float32, momentum: np.float32 = 0.9, epsilon: np.float32 = 10**(-5)):
+        self.lr = learning_rate
+        self.m = momentum
+        self.eps = epsilon
+        self.accum = 0
+    
+    def optimize(self, weights_matrix: np.ndarray, error_der_matrix: np.ndarray):
+        assert np.array_equal(weights_matrix.shape, error_der_matrix.shape)
+        self.accum += self.m * self.accum + (1 - self.m) * np.power(error_der_matrix, 2)
+        result = weights_matrix - self.lr / np.sqrt(self.accum + self.eps) * error_der_matrix
+        return result
 
+    def reboot(self):
+        self.accum = np.zeros_like(self.accum)
     
