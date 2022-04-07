@@ -18,7 +18,8 @@ from .losses import (
 
 from .layers import (
     Layer,
-    Dense
+    Dense,
+    BatchNormalizer
 )
 
 from .models import (
@@ -33,6 +34,7 @@ from .optimizers import (
 
 __all__ = (
     Activation,
+    BatchNormalizer,
     Crossentropy,
     Dense,
     GradDesc,
