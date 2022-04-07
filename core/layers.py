@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from .activations import Activation
 from .optimizers import Optimizer
 from .initializers import Initializer
-import pdb
+
    
 class Layer(ABC):
     @abstractmethod
@@ -63,7 +63,7 @@ class Dense(Layer):
 
 
 class BatchNormalizer(Layer):
-    def __init__(self, size: np.int32, optimizer: Optimizer, epsilon: np.float32 = 10**(-5)):
+    def __init__(self, size: np.int32, optimizer: Optimizer, epsilon: np.float32 = 10**(-8)):
         self.scale = np.ones((1, size), dtype=np.float32)
         self.bias = np.zeros((1, size), dtype=np.float32)        
         self.eps = epsilon
@@ -74,8 +74,8 @@ class BatchNormalizer(Layer):
         """inputs: np.ndarray (batch_size, n_prev_neurons)
             return shape == (batch_size, n_neurons)"""
         self.mean = np.expand_dims(inputs.mean(axis=0), 0)
-        self.norm = np.sqrt(np.power(np.expand_dims(inputs.std(axis=0), 0), 2) + self.eps)        
-        return self.scale * (inputs - self.mean) / self.norm + self.bias
+        self.norm = 1 / np.sqrt(np.power(np.expand_dims(inputs.std(axis=0), 0), 2) + self.eps)                
+        return self.scale * self.norm *(inputs - self.mean)  + self.bias
 
     def backward(self, inputs: np.ndarray, outputs: np.ndarray, error_grad_mat: np.ndarray) -> np.ndarray:
         """надо вернуть градиент ошибки по выходам предыдущего слоя и в текущем поменять параметры масштаба и смещения
@@ -98,7 +98,7 @@ class BatchNormalizer(Layer):
         # Произведем шаг оптимизации коэффициента сдвига
         self.bias = self.optimizer_bias.optimize(self.bias, error_grad_by_bias)
         # Найдем градиент ошибки по коэфициенту масштаба        
-        error_grad_by_scale = np.expand_dims(((inputs - self.mean) / self.norm * error_grad_mat).sum(axis=0), 0)
+        error_grad_by_scale = np.expand_dims((self.norm * (inputs - self.mean) * error_grad_mat).sum(axis=0), 0)
         # Произведем шаг оптимизации коэффициента масштаба
         self.scale = self.optimizer_scale.optimize(self.scale, error_grad_by_scale)
         # Вернем градиент ошибки по выходам предыдущего слоя

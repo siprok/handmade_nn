@@ -41,7 +41,7 @@ class Momentum(OptimizerWithState):
 
 
 class Adagrad(OptimizerWithState):
-    def __init__(self, learning_rate: np.float32, epsilon: np.float32 = 10**(-5)):
+    def __init__(self, learning_rate: np.float32, epsilon: np.float32 = 10**(-8)):
         assert epsilon * learning_rate > 0
         self.lr = learning_rate
         self.eps = epsilon
@@ -49,17 +49,16 @@ class Adagrad(OptimizerWithState):
     
     def optimize(self, weights_matrix: np.ndarray, error_der_matrix: np.ndarray):
         assert np.array_equal(weights_matrix.shape, error_der_matrix.shape)
-        
         self.accum += np.power(error_der_matrix, 2)
-        result = weights_matrix - error_der_matrix * self.lr / np.sqrt(self.accum + self.eps)
-        return result
+        return weights_matrix - error_der_matrix * self.lr / np.sqrt(self.accum + self.eps)
+         
 
     def reboot(self):
         self.accum = np.zeros_like(self.accum)
 
 
 class RMSProp(OptimizerWithState):
-    def __init__(self, learning_rate: np.float32, momentum: np.float32 = 0.9, epsilon: np.float32 = 10**(-5)):
+    def __init__(self, learning_rate: np.float32, momentum: np.float32 = 0.9, epsilon: np.float32 = 10**(-8)):
         assert epsilon * learning_rate > 0
         assert 0 < momentum and momentum < 1 
         self.lr = learning_rate
@@ -70,15 +69,14 @@ class RMSProp(OptimizerWithState):
     def optimize(self, weights_matrix: np.ndarray, error_der_matrix: np.ndarray):
         assert np.array_equal(weights_matrix.shape, error_der_matrix.shape)
         self.accum += self.m * self.accum + (1 - self.m) * np.power(error_der_matrix, 2)
-        result = weights_matrix - error_der_matrix * self.lr / np.sqrt(self.accum + self.eps)
-        return result
-
+        return weights_matrix - error_der_matrix * self.lr / np.sqrt(self.accum + self.eps)
+         
     def reboot(self):
         self.accum = np.zeros_like(self.accum)
 
 
 class Adam(OptimizerWithState):
-    def __init__(self, learning_rate: np.float32, momentum_1: np.float32 = 0.9, momentum_2: np.float32 = 0.9, epsilon: np.float32 = 10**(-5)):
+    def __init__(self, learning_rate: np.float32, momentum_1: np.float32 = 0.9, momentum_2: np.float32 = 0.9, epsilon: np.float32 = 10**(-8)):
         assert epsilon * learning_rate > 0
         assert 0 < momentum_1 and momentum_1 < 1 
         assert 0 < momentum_2 and momentum_2 < 1 
@@ -99,9 +97,7 @@ class Adam(OptimizerWithState):
         # Корректировка накопителей для несмещенности
         self.accum_1_ord_unbiased = self.accum_1_ord * self.im1
         self.accum_2_ord_unbiased = self.accum_2_ord * self.im2
-        # Пересчет весов
-        result = weights_matrix - self.accum_1_ord_unbiased * self.lr / np.sqrt(self.accum_2_ord_unbiased + self.eps) 
-        return result
+        return weights_matrix - self.accum_1_ord_unbiased * self.lr / np.sqrt(self.accum_2_ord_unbiased + self.eps) 
 
     def reboot(self):
         self.accum_1_ord = np.zeros_like(self.accum_1_ord)

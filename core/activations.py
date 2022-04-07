@@ -35,12 +35,18 @@ class Tanh(Activation):
 
 class Softmax(Activation):
     @staticmethod
-    def calc(inputs: np.ndarray) -> np.ndarray:
-        powered = np.exp(inputs)
-        return powered / np.expand_dims(powered.sum(axis=1),1)
+    def calc(inputs: np.ndarray, epsilon: np.float32 = 10**(-8)) -> np.ndarray:
+        """outputs.shape(batch_size, n_neurons)"""
+        # powered = np.exp(inputs)
+        # return powered / np.expand_dims(powered.sum(axis=1),1)
+        maximum = np.expand_dims(inputs.max(axis=1),1)
+        ln_of_sum = maximum + np.log(np.expand_dims(np.exp(inputs - maximum).sum(axis=1),1) + epsilon)
+        ln_result = inputs - ln_of_sum
+        return np.exp(ln_result)
     @staticmethod
     def error_back_prop(outputs: np.ndarray, error_grad: np.ndarray) -> np.ndarray:
-        """outputs.shape(batch_size, n_neurons)  error_grad.shape == (batch_size, n_neurons)
+        """outputs.shape(batch_size, n_neurons)
+        c  error_grad.shape == (batch_size, n_neurons)
            return shape == (batch_size, n_neurons)"""
         assert np.array_equal(outputs.shape, error_grad.shape) 
         batch_size, n_neurons = outputs.shape

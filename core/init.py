@@ -27,6 +27,13 @@ from .models import (
     MNISTDense
 )
 
+from .metrics import (
+    Metric,
+    Precision,
+    Recall,
+    Roc_Auc
+)
+
 from .optimizers import (
     Optimizer,
     GradDesc
@@ -41,12 +48,16 @@ __all__ = (
     He,
     Initializer,
     MNISTDense,
+    Metric,
     Model,
     Layer,
     Linear,
     Loss,
     Optimizer,
+    Precision,
+    Recall,
     ReLu,
+    Roc_Auc,
     Softmax,
     Tanh,    
     Xavier
