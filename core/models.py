@@ -68,6 +68,8 @@ class MNISTDense(Model):
             train_samples: np.ndarray,
             train_targets: np.ndarray,
             metrics: Iterable[Metric],
+            l1: np.ndarray = 0.001,
+            l2: np.ndarray = 0.001,
             val_part: np.float32 = 0.2,):
         assert val_part < 1
         epoch_size = train_targets.shape[0]  # количество элементов из обучающей выборки наодной эпохе обучения
@@ -87,7 +89,7 @@ class MNISTDense(Model):
                 samples = train_samples[batch_indxs]  # входные значения пакета
                 targets = train_targets[batch_indxs]  # целевые значения пакета
                 a_layers_inputs.append(samples)  # установим входные значения для первого слоя
-                
+                l2_error = 0
                 for j, layer in enumerate(self.layers): # распространение вперёд
                     # print(f"layer {j} max input {a_layers_inputs[-1].max()}")
                     a_layers_inputs.append(layer.forward(a_layers_inputs[j]))
@@ -97,12 +99,23 @@ class MNISTDense(Model):
                 for j, layer in enumerate(self.layers[::-1]): # распространение назад
                     inputs = a_layers_inputs[-(j+2)]
                     outputs = a_layers_inputs[-(j+1)]
-                    error_grad_mat = layer.backward(inputs=inputs, outputs=outputs, error_grad_mat=error_grad_mat)
+                    error_grad_mat = layer.backward(inputs=inputs, outputs=outputs, error_grad_mat=error_grad_mat, l1=l1, l2=l2)
+            # Получим оценки на эпохе обучения
+            print(f"Mean loss: {round(losses[e].mean(), 2)}")
+            fit_prediction =  self.predict(train_samples[:fit_size])
+            print(
+                "Fit scores: "
+                 + " | ".join((m.__class__.__name__ + " " 
+                                + str(round(m.calc(train_targets[:fit_size], fit_prediction), 4))
+                                 for m in metrics)))
             val_samples = train_samples[order[fit_size:]]
             val_targets = train_targets[order[fit_size:]]
-            predict = self.predict(val_samples)
-            print(f"Mean loss: {round(losses[e].mean())}")
-            print("Validation scores: " + " | ".join((m.__class__.__name__ + " " + str(round(m.calc(val_targets, predict), 2)) for m in metrics)))
+            val_prediction = self.predict(val_samples)
+            print(
+                "Validation scores: "
+                 + " | ".join((m.__class__.__name__ + " " 
+                                + str(round(m.calc(val_targets, val_prediction), 4))
+                                 for m in metrics)))
         return losses
 
     def predict(self, test_samples: np.ndarray) -> np.ndarray:

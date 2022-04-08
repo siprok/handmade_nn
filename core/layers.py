@@ -40,7 +40,7 @@ class Dense(Layer):
         w_inputs = add_unit_h(inputs)
         return self.activation.calc(w_inputs.dot(self.weights))
 
-    def backward(self, inputs: np.ndarray, outputs: np.ndarray, error_grad_mat: np.ndarray) -> np.ndarray:
+    def backward(self, inputs: np.ndarray, outputs: np.ndarray, error_grad_mat: np.ndarray, l1:np.float32 = 0.001, l2:np.float32 = 0.001) -> np.ndarray:
         """надо вернуть градиент ошибки по выходам предыдущего слоя и в текущем поменять веса
             inputs.shape == (batch_size, n_prev_neurons),
             outputs.shape == (batch_size, n_neurons),
@@ -55,7 +55,7 @@ class Dense(Layer):
         # Найдем градиент ошибки по выходам предыдущего слоя
         grad_by_prev_layer = grad_out_by_summator.dot(self.weights[:-1, :].T)
         # Найдем матрицу производных ошибки по весам нейронов текущего слоя
-        error_der_matrix = w_inputs.T.dot(error_grad_mat) / batch_size
+        error_der_matrix = w_inputs.T.dot(error_grad_mat) / batch_size + 2 * l2 * self.weights + l1 * (self.weights > 0)
         # Произведем шаг оптимизации весов по найенным производным
         self.weights = self.optimizer.optimize(self.weights, error_der_matrix)
         # Вернем градиент ошибки по выходам предыдущего слоя
@@ -74,10 +74,10 @@ class BatchNormalizer(Layer):
         """inputs: np.ndarray (batch_size, n_prev_neurons)
             return shape == (batch_size, n_neurons)"""
         self.mean = np.expand_dims(inputs.mean(axis=0), 0)
-        self.norm = 1 / np.sqrt(np.power(np.expand_dims(inputs.std(axis=0), 0), 2) + self.eps)                
+        self.norm = 1 / (np.expand_dims(inputs.std(axis=0), 0) + self.eps)
         return self.scale * self.norm *(inputs - self.mean)  + self.bias
 
-    def backward(self, inputs: np.ndarray, outputs: np.ndarray, error_grad_mat: np.ndarray) -> np.ndarray:
+    def backward(self, inputs: np.ndarray, outputs: np.ndarray, error_grad_mat: np.ndarray, l1:np.float32 = 0.001, l2:np.float32 = 0.001) -> np.ndarray:
         """надо вернуть градиент ошибки по выходам предыдущего слоя и в текущем поменять параметры масштаба и смещения
             inputs.shape == (batch_size, n_neurons),
             outputs.shape == (batch_size, n_neurons),
