@@ -24,7 +24,7 @@ class Classifier(Model):
         pass
     
     
-class MNISTDense(Model):
+class MNISTDenseClassifier(Classifier):
     def __init__(self,
                  input_size: int,
                  layers_sizes: Sequence[int],
@@ -118,8 +118,11 @@ class MNISTDense(Model):
                                  for m in metrics)))
         return losses
 
-    def predict(self, test_samples: np.ndarray) -> np.ndarray:
+    def predict_proba(self, test_samples: np.ndarray) -> np.ndarray:
         output = test_samples
         for layer in self.layers: # распространение вперёд
             output = layer.forward(output)
-        return np.expand_dims(np.argmax(output, axis=1), 1)
+        return output
+
+    def predict(self, test_samples: np.ndarray) -> np.ndarray:
+        return np.expand_dims(np.argmax(self.predict_proba(test_samples), axis=1), 1)

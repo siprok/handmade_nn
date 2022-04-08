@@ -24,7 +24,7 @@ from .layers import (
 
 from .models import (
     Model,
-    MNISTDense
+    MNISTDenseClassifier
 )
 
 from .metrics import (
@@ -47,7 +47,7 @@ __all__ = (
     GradDesc,
     He,
     Initializer,
-    MNISTDense,
+    MNISTDenseClassifier,
     Metric,
     Model,
     Layer,
