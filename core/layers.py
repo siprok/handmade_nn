@@ -115,22 +115,54 @@ def add_unit_h(source: np.ndarray):
 
 
 class Flatten(Layer):
-    def __init__(self, input_shape: np.ndarray):
-        self.input_shape = input_shape
+    def __init__(self):
+        pass
 
     def forward(self, inputs: np.ndarray):
         """inputs: np.ndarray (batch_size, rows, cols)
            return shape == (batch_size, rows * cols)"""
         return inputs.reshape((inputs.shape[0], -1))
 
-    def backward(self, inputs: np.ndarray, error_grad_mat: np.ndarray):
+    def backward(self,
+                 inputs: np.ndarray,
+                 error_grad_mat: np.ndarray,
+                 l1: np.float32 = 0.001,
+                 l2: np.float32 = 0.001) -> np.ndarray:
         """
         Надо изменить рамерность матрицы градиента ошибки
-        error_grad_mat.shape == (batch_size, n_neurons),
+        error_grad_mat.shape == (batch_size, n_elements),
         return:
             np.ndarray(inputs.shape)
         """
         return error_grad_mat.reshape(inputs.shape)
 
 
-
+class  MaxPool1D(Layer):
+    def __init__(self, pool_size: int=2, stride: int=1):
+        self.pool_size = pool_size
+        self.stride = stride
+        
+    def forward(self, inputs: np.ndarray) -> np.ndarray:
+        """inputs: np.ndarray(batch_size, n_elements)
+           return (inputs[1] - pool_size + 1) // stride"""
+        assert len(inputs.shape) == 2 
+        output_size = np.floor((inputs.shape[1] - self.pool_size + 1) / self.stride + 0.5).astype(int)
+        result = np.empty((inputs.shape[0], output_size), dtype=np.float32)
+        self.max_inds = np.empty_like(result, dtype=np.uint32)
+        for out_ind in range(output_size):
+            start = out_ind * self.stride
+            stop = start + self.pool_size
+            self.max_inds[:, out_ind: out_ind + 1] = np.argmax(inputs[:, start: stop], axis=1, keepdims=True) + start
+            result[:, out_ind] = inputs[range(inputs.shape[0]), self.max_inds[:, out_ind]]
+        return result
+    
+    def backward(self,
+                 inputs: np.ndarray,
+                 error_grad_mat: np.ndarray,
+                 l1: np.float32 = 0.001,
+                 l2: np.float32 = 0.001) -> np.ndarray:
+        error_by_inputs = np.zeros_like(inputs)
+        rows = np.repeat(range(error_grad_mat.shape[0]), error_grad_mat.shape[1]).flatten()
+        cols = self.max_inds.flatten()
+        error_by_inputs[rows, cols] = error_grad_mat.flatten()
+        return error_by_inputs
