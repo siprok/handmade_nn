@@ -1,9 +1,15 @@
 import numpy as np
+from typing import Tuple
 from copy import deepcopy
 from abc import ABC, abstractmethod
 from .activations import Activation
 from .optimizers import Optimizer
 from .initializers import Initializer
+
+
+def add_unit_h(source: np.ndarray):
+    size = source.shape[0]
+    return np.hstack((source, np.ones((size, 1))))
 
    
 class Layer(ABC):
@@ -109,10 +115,6 @@ class BatchNormalizer(Layer):
         # Вернем градиент ошибки по выходам предыдущего слоя
         return grad_by_prev_layer
 
-def add_unit_h(source: np.ndarray):
-    size = source.shape[0]
-    return np.hstack((source, np.ones((size, 1))))
-
 
 class Flatten(Layer):
     def __init__(self):
@@ -138,23 +140,33 @@ class Flatten(Layer):
 
 
 class  MaxPool1D(Layer):
-    def __init__(self, pool_size: int=2, stride: int=1):
+    def __init__(self, pool_size: int=2, stride: int=1, axis: int=1):
         self.pool_size = pool_size
         self.stride = stride
+        self.axis = axis
         
     def forward(self, inputs: np.ndarray) -> np.ndarray:
         """inputs: np.ndarray(batch_size, n_elements)
            return (inputs[1] - pool_size + 1) // stride"""
-        assert len(inputs.shape) == 2 
-        output_size = np.floor((inputs.shape[1] - self.pool_size + 1) / self.stride + 0.5).astype(int)
-        result = np.empty((inputs.shape[0], output_size), dtype=np.float32)
-        self.max_inds = np.empty_like(result, dtype=np.uint32)
+        pooled = np.apply_along_axis(
+            func1d=self.__pool,
+            axis=self.axis,
+            arr=inputs
+        )
+        result = np.take(pooled, indices=0, axis=self.axis)
+        self.max_inds = np.take(pooled, indices=1, axis=self.axis).astype(np.uint32)
+        return result
+    
+    def __pool(self, inputs: np.ndarray) -> np.ndarray:
+        output_size = np.floor((inputs.size - self.pool_size + 1) / self.stride + 0.5).astype(int)
+        result = np.zeros(output_size, dtype=np.float32)
+        max_inds = np.zeros_like(result, dtype=np.uint32)
         for out_ind in range(output_size):
             start = out_ind * self.stride
             stop = start + self.pool_size
-            self.max_inds[:, out_ind: out_ind + 1] = np.argmax(inputs[:, start: stop], axis=1, keepdims=True) + start
-            result[:, out_ind] = inputs[range(inputs.shape[0]), self.max_inds[:, out_ind]]
-        return result
+            max_inds[out_ind] = np.argmax(inputs[start: stop]) + start
+            result[out_ind] = inputs[max_inds[out_ind]]
+        return result, max_inds
     
     def backward(self,
                  inputs: np.ndarray,
@@ -162,7 +174,7 @@ class  MaxPool1D(Layer):
                  l1: np.float32 = 0.001,
                  l2: np.float32 = 0.001) -> np.ndarray:
         error_by_inputs = np.zeros_like(inputs)
-        rows = np.repeat(range(error_grad_mat.shape[0]), error_grad_mat.shape[1]).flatten()
-        cols = self.max_inds.flatten()
-        error_by_inputs[rows, cols] = error_grad_mat.flatten()
+        indexes = np.array(list(np.ndindex(*(error_grad_mat.shape)))) 
+        np.put(indexes, np.arange(indexes.shape[0]) * indexes.shape[1] + self.axis, self.max_inds.flatten())
+        error_by_inputs[tuple(indexes.T)] = error_grad_mat.flatten()
         return error_by_inputs
