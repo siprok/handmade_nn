@@ -11,7 +11,7 @@ class Layer(ABC):
     def forward(self, inputs: np.ndarray) -> np.ndarray:
         pass
     @abstractmethod
-    def backward(self, inputs: np.ndarray, error_grad_mat: np.ndarray) -> np.ndarray:
+    def backward(self, inputs: np.ndarray, error_grad_mat: np.ndarray, l1: np.float32 = 0.001, l2: np.float32 = 0.001) -> np.ndarray:
         pass
 
 
@@ -77,7 +77,12 @@ class BatchNormalizer(Layer):
         self.norm = 1 / (np.expand_dims(inputs.std(axis=0), 0) + self.eps)
         return self.scale * self.norm *(inputs - self.mean)  + self.bias
 
-    def backward(self, inputs: np.ndarray, outputs: np.ndarray, error_grad_mat: np.ndarray, l1:np.float32 = 0.001, l2:np.float32 = 0.001) -> np.ndarray:
+    def backward(self, 
+                 inputs: np.ndarray,
+                 outputs: np.ndarray,
+                 error_grad_mat: np.ndarray,
+                 l1: np.float32 = 0.001,
+                 l2: np.float32 = 0.001) -> np.ndarray:
         """надо вернуть градиент ошибки по выходам предыдущего слоя и в текущем поменять параметры масштаба и смещения
             inputs.shape == (batch_size, n_neurons),
             outputs.shape == (batch_size, n_neurons),
@@ -107,3 +112,25 @@ class BatchNormalizer(Layer):
 def add_unit_h(source: np.ndarray):
     size = source.shape[0]
     return np.hstack((source, np.ones((size, 1))))
+
+
+class Flatten(Layer):
+    def __init__(self, input_shape: np.ndarray):
+        self.input_shape = input_shape
+
+    def forward(self, inputs: np.ndarray):
+        """inputs: np.ndarray (batch_size, rows, cols)
+           return shape == (batch_size, rows * cols)"""
+        return inputs.reshape((inputs.shape[0], -1))
+
+    def backward(self, inputs: np.ndarray, error_grad_mat: np.ndarray):
+        """
+        Надо изменить рамерность матрицы градиента ошибки
+        error_grad_mat.shape == (batch_size, n_neurons),
+        return:
+            np.ndarray(inputs.shape)
+        """
+        return error_grad_mat.reshape(inputs.shape)
+
+
+
