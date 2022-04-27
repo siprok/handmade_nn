@@ -146,8 +146,7 @@ class  MaxPool1D(Layer):
         self.axis = axis
         
     def forward(self, inputs: np.ndarray) -> np.ndarray:
-        """inputs: np.ndarray(batch_size, n_elements)
-           return (inputs[1] - pool_size + 1) // stride"""
+        """inputs: np.ndarray(batch_size, *dimensions)"""
         pooled = np.apply_along_axis(
             func1d=self.__pool,
             axis=self.axis,
@@ -158,6 +157,7 @@ class  MaxPool1D(Layer):
         return result
     
     def __pool(self, inputs: np.ndarray) -> np.ndarray:
+        """inputs: 1d array"""
         output_size = np.floor((inputs.size - self.pool_size + 1) / self.stride + 0.5).astype(int)
         result = np.zeros(output_size, dtype=np.float32)
         max_inds = np.zeros_like(result, dtype=np.uint32)
@@ -176,5 +176,67 @@ class  MaxPool1D(Layer):
         error_by_inputs = np.zeros_like(inputs)
         indexes = np.array(list(np.ndindex(*(error_grad_mat.shape)))) 
         np.put(indexes, np.arange(indexes.shape[0]) * indexes.shape[1] + self.axis, self.max_inds.flatten())
+        error_by_inputs[tuple(indexes.T)] = error_grad_mat.flatten()
+        return error_by_inputs
+
+
+class  MaxPool2D(Layer):
+    def __init__(self, pool_sizes: Tuple[int, int]=(2, 2), strides: Tuple[int, int]=(1, 1), axes: Tuple[int, int]=(1, 2)):
+        assert axes[0] < axes[1]
+        self.pool_sizes = pool_sizes
+        self.strides = strides
+        self.axes = list(axes)
+        
+    def forward(self, inputs: np.ndarray) -> np.ndarray:
+        """inputs: np.ndarray(batch_size, *dimensions)"""
+        if len(inputs.shape) == 2:
+            result, self.max_inds = self.__pool(inputs)
+        else:
+            result_dims = np.array(list(inputs.shape))
+            result_dims[self.axes] = self.__calc_out_size(result_dims[self.axes]) 
+            result = np.empty(result_dims, dtype=np.float32)
+            self.max_inds = np.zeros_like(result, dtype=object)
+            poped_axes = list(range(len(inputs.shape)))
+            poped_axes.pop(self.axes[0])
+            poped_axes.pop(self.axes[1] - 1)
+            poped_axes = tuple(np.expand_dims(poped_axes, 0))
+            poped_dims = np.array(inputs.shape)[poped_axes]
+            indexes = np.array([slice(None)] * len(inputs.shape), dtype=object)
+            for others in np.ndindex(*poped_dims):
+                indexes[poped_axes] = others
+                tupled = tuple(indexes)
+                result[tupled], self.max_inds[tupled] = self.__pool(inputs[tupled]) 
+        return result
+    
+    def __calc_out_size(self, inputs_shape: tuple):
+        """inputs_shape: shape of pooled 2d matrix"""
+        return [
+            np.floor((inputs_shape[i] - self.pool_sizes[i] + 1) / self.strides[i] + 0.5).astype(int)
+            for i in range(2)
+        ]
+
+    def __pool(self, inputs: np.ndarray) -> np.ndarray:
+        """inputs: 2d array"""
+        output_sizes = self.__calc_out_size(inputs.shape)
+        result = np.zeros(output_sizes, dtype=np.float32)
+        max_inds = np.zeros(result.shape, dtype=tuple)
+        for out_inds in np.ndindex(*output_sizes):
+            start = [out_inds[i] * self.strides[i] for i in range(2)]
+            stop = [start[i] + self.pool_sizes[i] for i in range(2)]
+            borders = tuple([slice(start[i], stop[i]) for i in range(2)])
+            max_inds[out_inds] = tuple(np.unravel_index(np.argmax(inputs[borders]), self.pool_sizes) + np.array(start))
+            result[out_inds] = inputs[max_inds[out_inds]]
+        return result, max_inds
+    
+    def backward(self,
+                inputs: np.ndarray,
+                error_grad_mat: np.ndarray,
+                l1: np.float32 = 0.001,
+                l2: np.float32 = 0.001) -> np.ndarray:
+        error_by_inputs = np.zeros_like(inputs)
+        flattend_max = np.array(list(self.max_inds.flatten()))
+        indexes = np.array(list(np.ndindex(*(error_grad_mat.shape)))) 
+        for i in range(2):
+            np.put(indexes, np.arange(indexes.shape[0]) * indexes.shape[1] + self.axes[i], flattend_max[:, i])
         error_by_inputs[tuple(indexes.T)] = error_grad_mat.flatten()
         return error_by_inputs

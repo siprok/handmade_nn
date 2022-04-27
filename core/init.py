@@ -19,7 +19,10 @@ from .losses import (
 from .layers import (
     Layer,
     Dense,
-    BatchNormalizer
+    BatchNormalizer,
+    Flatten,
+    MaxPool1D,
+    MaxPool2D
 )
 
 from .models import (
@@ -44,9 +47,12 @@ __all__ = (
     BatchNormalizer,
     Crossentropy,
     Dense,
+    Flatten,
     GradDesc,
     He,
     Initializer,
+    MaxPool1D,
+    MaxPool2D,
     MNISTDenseClassifier,
     Metric,
     Model,
