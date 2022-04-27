@@ -1,9 +1,10 @@
 import numpy as np
 from typing import Tuple
 from copy import deepcopy
+from scipy.ndimage import correlate
 from abc import ABC, abstractmethod
-from .activations import Activation
-from .optimizers import Optimizer
+from .activations import Activation, ReLu
+from .optimizers import Optimizer, Adam
 from .initializers import Initializer
 
 
@@ -17,7 +18,11 @@ class Layer(ABC):
     def forward(self, inputs: np.ndarray) -> np.ndarray:
         pass
     @abstractmethod
-    def backward(self, inputs: np.ndarray, error_grad_mat: np.ndarray, l1: np.float32 = 0.001, l2: np.float32 = 0.001) -> np.ndarray:
+    def backward(self,
+                 inputs: np.ndarray,
+                 error_grad_mat: np.ndarray, 
+                 l1: np.float32 = 0.001, 
+                 l2: np.float32 = 0.001) -> np.ndarray:
         pass
 
 
@@ -139,7 +144,7 @@ class Flatten(Layer):
         return error_grad_mat.reshape(inputs.shape)
 
 
-class  MaxPool1D(Layer):
+class MaxPool1D(Layer):
     def __init__(self, pool_size: int=2, stride: int=1, axis: int=1):
         self.pool_size = pool_size
         self.stride = stride
@@ -180,8 +185,11 @@ class  MaxPool1D(Layer):
         return error_by_inputs
 
 
-class  MaxPool2D(Layer):
-    def __init__(self, pool_sizes: Tuple[int, int]=(2, 2), strides: Tuple[int, int]=(1, 1), axes: Tuple[int, int]=(1, 2)):
+class MaxPool2D(Layer):
+    def __init__(self,
+                 pool_sizes: Tuple[int, int]=(2, 2),
+                 strides: Tuple[int, int]=(1, 1),
+                 axes: Tuple[int, int]=(1, 2)):
         assert axes[0] < axes[1]
         self.pool_sizes = pool_sizes
         self.strides = strides
@@ -240,3 +248,124 @@ class  MaxPool2D(Layer):
             np.put(indexes, np.arange(indexes.shape[0]) * indexes.shape[1] + self.axes[i], flattend_max[:, i])
         error_by_inputs[tuple(indexes.T)] = error_grad_mat.flatten()
         return error_by_inputs
+
+
+class Conv2D(Layer):
+    def __init__(self,
+                 kernels_number: np.uint8=1,
+                 kernel_shape: Tuple[int, int]=(3, 3),
+                 input_channels: np.uint8=1,
+                 activation_class: type=ReLu,
+                 optimizer: Optimizer=Adam):
+        """
+        Свёрточный слой без аггрегации слоев для ядра
+        :param kernels_number: np.uint8
+            Количество ядер свертки
+        :param kernel_shape: Tuple[int, int]
+            Размерность ядра свертки
+        :param input_channels: np.uint8
+            Количество каналов входного тензора (в каждом пакете)
+        :param activation_class: type
+            Класс функции активации для элементов выходных тензоров
+        :param optimizer: Optimizer
+            Оптимизатор для обучения коэффициентов ядер свертки и их смещений
+        """
+        assert issubclass(activation_class, Activation)
+        assert kernels_number > 0 and len(kernel_shape) == 2 and input_channels > 0
+        self.activation = activation_class
+        self.optimizer = optimizer
+        self.optimizer_bias = deepcopy(optimizer)
+        self.kernels_number = kernels_number
+        self.kernel_shape = kernel_shape
+        self.input_channels = input_channels
+        self.kernels = np.random.rand(kernels_number, *kernel_shape, input_channels) * 2 - 1
+        self.biases = np.random.rand(kernels_number, 1, 1, input_channels) * 2 - 1
+
+    def forward(self, inputs: np.ndarray) -> np.ndarray:
+        """
+        Свёртка каналов с соответствующими каналами ядер  
+        :params inputs: np.ndarray (batch_size, rows, columns, channels)
+        :return: np.ndarray (batch_size, rows, cols, channels * filters)
+        """
+        output = np.zeros(shape=(inputs.shape[0],
+                                 inputs.shape[1],
+                                 inputs.shape[2],
+                                 inputs.shape[3] * self.kernels_number),
+                         dtype=np.float32)
+        for batch, channel, kernel in np.ndindex(inputs.shape[0], inputs.shape[-1], self.kernels_number):
+            output[batch, :, :, kernel * inputs.shape[-1] + channel] = correlate(
+                inputs[batch, :, :, channel],
+                self.kernels[kernel, :, :, channel],
+                mode="constant",
+                cval=0
+            )
+        return output
+
+    def backward(self,
+                 inputs: np.ndarray,
+                 error_grad_mat: np.ndarray,
+                 l1: np.float32 = 0.001,
+                 l2: np.float32 = 0.001) -> np.ndarray:
+        # TODO
+        pass
+
+
+class Conv2DAgg(Layer):
+    def __init__(self,
+                 kernels_number: np.uint8=1,
+                 kernel_shape: Tuple[int, int]=(3, 3),
+                 input_channels: np.uint8=1,
+                 activation_class: type=ReLu,
+                 optimizer: Optimizer=Adam):
+        """
+        Свёрточный слой с аггрегации слоев для ядра
+        :param kernels_number: np.uint8
+            Количество ядер свертки
+        :param kernel_shape: Tuple[int, int]
+            Размерность ядра свертки
+        :param input_channels: np.uint8
+            Количество каналов входного тензора (в каждом пакете)
+        :param activation_class: type
+            Класс функции активации для элементов выходных тензоров
+        :param optimizer: Optimizer
+            Оптимизатор для обучения коэффициентов ядер свертки и их смещений
+        """
+        assert issubclass(activation_class, Activation)
+        assert kernels_number > 0 and len(kernel_shape) == 2 and input_channels > 0
+        self.activation = activation_class
+        self.optimizer = optimizer
+        self.optimizer_bias = deepcopy(optimizer)
+        self.kernels_number = kernels_number
+        self.kernel_shape = kernel_shape
+        self.input_channels = input_channels
+        self.kernels = np.random.rand(kernels_number, *kernel_shape, input_channels) * 2 - 1
+        self.biases = np.random.rand(kernels_number, 1, 1, input_channels) * 2 - 1
+
+    def forward(self, inputs: np.ndarray) -> np.ndarray:
+        """
+        Свёртка каналов с соответствующими каналами ядер  
+        :params inputs: np.ndarray (batch_size, rows, columns, channels)
+        :return: np.ndarray (batch_size, rows, cols, channels * filters)
+        """
+        divided = inputs / inputs.shape[-1]
+        output = np.zeros(shape=(inputs.shape[0],
+                                 inputs.shape[1],
+                                 inputs.shape[2],
+                                 self.kernels_number),
+                         dtype=np.float32)
+        for batch, channel, kernel in np.ndindex(inputs.shape[0], inputs.shape[-1], self.kernels_number):
+            output[batch, :, :, kernel] += correlate(
+                divided[batch, :, :, channel],
+                self.kernels[kernel, :, :, channel],
+                mode="constant",
+                cval=0
+            )
+        return output
+
+    def backward(self,
+                 inputs: np.ndarray,
+                 error_grad_mat: np.ndarray,
+                 l1: np.float32 = 0.001,
+                 l2: np.float32 = 0.001) -> np.ndarray:
+        # TODO
+        pass
