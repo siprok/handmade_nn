@@ -51,7 +51,12 @@ class Dense(Layer):
         w_inputs = add_unit_h(inputs)
         return self.activation.calc(w_inputs.dot(self.weights))
 
-    def backward(self, inputs: np.ndarray, outputs: np.ndarray, error_grad_mat: np.ndarray, l1:np.float32 = 0.001, l2:np.float32 = 0.001) -> np.ndarray:
+    def backward(self,
+                 inputs: np.ndarray, 
+                 outputs: np.ndarray, 
+                 error_grad_mat: np.ndarray, 
+                 l1:np.float32 = 0.001, 
+                 l2:np.float32 = 0.001) -> np.ndarray:
         """надо вернуть градиент ошибки по выходам предыдущего слоя и в текущем поменять веса
             inputs.shape == (batch_size, n_prev_neurons),
             outputs.shape == (batch_size, n_neurons),
@@ -66,7 +71,7 @@ class Dense(Layer):
         # Найдем градиент ошибки по выходам предыдущего слоя
         grad_by_prev_layer = grad_out_by_summator.dot(self.weights[:-1, :].T)
         # Найдем матрицу производных ошибки по весам нейронов текущего слоя
-        error_der_matrix = w_inputs.T.dot(error_grad_mat) / batch_size + 2 * l2 * self.weights + l1 * (self.weights > 0)
+        error_der_matrix = w_inputs.T.dot(grad_out_by_summator) / batch_size + 2 * l2 * self.weights + l1 * ((self.weights > 0) * 2 -1)
         # Произведем шаг оптимизации весов по найенным производным
         self.weights = self.optimizer.optimize(self.weights, error_der_matrix)
         # Вернем градиент ошибки по выходам предыдущего слоя
@@ -84,8 +89,8 @@ class BatchNormalizer(Layer):
     def forward(self, inputs: np.ndarray):
         """inputs: np.ndarray (batch_size, n_prev_neurons)
             return shape == (batch_size, n_neurons)"""
-        self.mean = np.expand_dims(inputs.mean(axis=0), 0)
-        self.norm = 1 / (np.expand_dims(inputs.std(axis=0), 0) + self.eps)
+        self.mean = inputs.mean(axis=0, keepdims=True)
+        self.norm = 1 / (inputs.std(axis=0, keepdims=True) + self.eps)
         return self.scale * self.norm *(inputs - self.mean)  + self.bias
 
     def backward(self, 
@@ -104,17 +109,17 @@ class BatchNormalizer(Layer):
         # Найдем градиент ошибки по нормализованным входам
         grad_by_normalized = error_grad_mat * self.scale
         # Найдем градиент ошибки по дисперсии
-        grad_by_disp = -0.5 * np.power(self.norm, 3) * np.expand_dims((grad_by_normalized * (inputs - self.mean)).sum(axis=0), 0)
+        grad_by_disp = -0.5 * np.power(self.norm, 3) * (grad_by_normalized * (inputs - self.mean)).sum(axis=0, keepdims=True)
         # Найдем градиент ошибки по мат. ожиданию
-        grad_by_mean = -self.norm * np.expand_dims((grad_by_normalized).sum(axis=0), 0) -2 * grad_by_disp * np.expand_dims((inputs - self.mean).sum(axis=0), 0) / (batch_size - 1)
+        grad_by_mean = -self.norm * (grad_by_normalized).sum(axis=0, keepdims=True) -2 * grad_by_disp * (inputs - self.mean).sum(axis=0, keepdims=True) / (batch_size - 1)
         # Найдем градиент ошибки по выходам предыдущего слоя
         grad_by_prev_layer = self.norm * grad_by_normalized + grad_by_disp * 2 * (inputs - self.mean) / (batch_size - 1) + grad_by_mean / batch_size
         # Найдем градиент ошибки по коэфициенту сдвига
-        error_grad_by_bias = np.expand_dims(error_grad_mat.sum(axis=0), 0)
+        error_grad_by_bias = error_grad_mat.sum(axis=0, keepdims=True)
         # Произведем шаг оптимизации коэффициента сдвига
         self.bias = self.optimizer_bias.optimize(self.bias, error_grad_by_bias)
         # Найдем градиент ошибки по коэфициенту масштаба        
-        error_grad_by_scale = np.expand_dims((self.norm * (inputs - self.mean) * error_grad_mat).sum(axis=0), 0)
+        error_grad_by_scale = (self.norm * (inputs - self.mean) * error_grad_mat).sum(axis=0, keepdims=True)
         # Произведем шаг оптимизации коэффициента масштаба
         self.scale = self.optimizer_scale.optimize(self.scale, error_grad_by_scale)
         # Вернем градиент ошибки по выходам предыдущего слоя
@@ -268,7 +273,7 @@ class Conv2D(Layer):
         :param activation_class: type
             Класс функции активации для элементов выходных тензоров
         :param optimizer: Optimizer
-            Оптимизатор для обучения коэффициентов ядер свертки и их смещений
+            Оптимизатор для обучения коэффициентов ядер свертки 
         """
         assert issubclass(activation_class, Activation)
         assert kernels_number > 0 and len(kernel_shape) == 2 and input_channels > 0
@@ -280,6 +285,8 @@ class Conv2D(Layer):
         self.input_channels = input_channels
         self.kernels = np.random.rand(kernels_number, *kernel_shape, input_channels) * 2 - 1
         self.biases = np.random.rand(kernels_number, 1, 1, input_channels) * 2 - 1
+        self.kernels_der = np.zeros_like(self.kernels)  # матрица производных функции потерь по элементам ядер свертки
+        self.biases_der = np.zeros_like(self.biases)
 
     def forward(self, inputs: np.ndarray) -> np.ndarray:
         """
@@ -287,67 +294,6 @@ class Conv2D(Layer):
         :params inputs: np.ndarray (batch_size, rows, columns, channels)
         :return: np.ndarray (batch_size, rows, cols, channels * filters)
         """
-        output = np.zeros(shape=(inputs.shape[0],
-                                 inputs.shape[1],
-                                 inputs.shape[2],
-                                 inputs.shape[3] * self.kernels_number),
-                         dtype=np.float32)
-        for batch, channel, kernel in np.ndindex(inputs.shape[0], inputs.shape[-1], self.kernels_number):
-            output[batch, :, :, kernel * inputs.shape[-1] + channel] = correlate(
-                inputs[batch, :, :, channel],
-                self.kernels[kernel, :, :, channel],
-                mode="constant",
-                cval=0
-            )
-        return output
-
-    def backward(self,
-                 inputs: np.ndarray,
-                 error_grad_mat: np.ndarray,
-                 l1: np.float32 = 0.001,
-                 l2: np.float32 = 0.001) -> np.ndarray:
-        # TODO
-        pass
-
-
-class Conv2DAgg(Layer):
-    def __init__(self,
-                 kernels_number: np.uint8=1,
-                 kernel_shape: Tuple[int, int]=(3, 3),
-                 input_channels: np.uint8=1,
-                 activation_class: type=ReLu,
-                 optimizer: Optimizer=Adam):
-        """
-        Свёрточный слой с аггрегации слоев для ядра
-        :param kernels_number: np.uint8
-            Количество ядер свертки
-        :param kernel_shape: Tuple[int, int]
-            Размерность ядра свертки
-        :param input_channels: np.uint8
-            Количество каналов входного тензора (в каждом пакете)
-        :param activation_class: type
-            Класс функции активации для элементов выходных тензоров
-        :param optimizer: Optimizer
-            Оптимизатор для обучения коэффициентов ядер свертки и их смещений
-        """
-        assert issubclass(activation_class, Activation)
-        assert kernels_number > 0 and len(kernel_shape) == 2 and input_channels > 0
-        self.activation = activation_class
-        self.optimizer = optimizer
-        self.optimizer_bias = deepcopy(optimizer)
-        self.kernels_number = kernels_number
-        self.kernel_shape = kernel_shape
-        self.input_channels = input_channels
-        self.kernels = np.random.rand(kernels_number, *kernel_shape, input_channels) * 2 - 1
-        self.biases = np.random.rand(kernels_number, 1, 1, input_channels) * 2 - 1
-
-    def forward(self, inputs: np.ndarray) -> np.ndarray:
-        """
-        Свёртка каналов с соответствующими каналами ядер  
-        :params inputs: np.ndarray (batch_size, rows, columns, channels)
-        :return: np.ndarray (batch_size, rows, cols, channels * filters)
-        """
-        divided = inputs / inputs.shape[-1]
         output = np.zeros(shape=(inputs.shape[0],
                                  inputs.shape[1],
                                  inputs.shape[2],
@@ -355,17 +301,46 @@ class Conv2DAgg(Layer):
                          dtype=np.float32)
         for batch, channel, kernel in np.ndindex(inputs.shape[0], inputs.shape[-1], self.kernels_number):
             output[batch, :, :, kernel] += correlate(
-                divided[batch, :, :, channel],
+                inputs[batch, :, :, channel],
                 self.kernels[kernel, :, :, channel],
                 mode="constant",
                 cval=0
             )
-        return output
+        output += self.biases
+        return self.activation.calc(output)
 
     def backward(self,
-                 inputs: np.ndarray,
-                 error_grad_mat: np.ndarray,
-                 l1: np.float32 = 0.001,
-                 l2: np.float32 = 0.001) -> np.ndarray:
-        # TODO
-        pass
+                 inputs: np.ndarray, 
+                 outputs: np.ndarray, 
+                 error_grad_mat: np.ndarray, 
+                 l1:np.float32 = 0.001, 
+                 l2:np.float32 = 0.001) -> np.ndarray:
+        """
+        Обновить веса и вернуть матрицу частных производных по матрице входных значений
+        :params inputs: np.ndarray (batch_size, rows, columns, channels)
+            Матрица входных значений, полученная во время прямого распространения
+        :params error_grad_mat: np.ndarray (batch_size, rows, columns, channels * filters)
+            Матрица частных производных функции потерь по элементам выхода
+        """
+        batch_size = inputs.shape[0]
+        wided_rows = inputs.shape[1] + self.kernel_shape[0] - 1
+        wided_cols = inputs.shape[2] + self.kernel_shape[1] - 1
+        rows_radius = (self.kernel_shape[0] - 1) //  2
+        cols_radius = (self.kernel_shape[1] - 1) //  2
+        # Создадим расширенную матрицу входных значений на радиусы ядра светки
+        divided_inputs = np.zeros((batch_size, wided_rows, wided_cols, inputs.shape[-1]), dtype=np.float32)
+        # Разделим матрицу входных значений на размер пакета для накопления ошибок в усредненном виде
+        divided_inputs[:, rows_radius: -rows_radius, cols_radius: -cols_radius, :] = inputs / batch_size
+        # Найдем градиент ошибки по входам функции активации
+        grad_error_by_act_in = self.activation.error_back_prop(outputs, error_grad_mat)
+        # Разделим матрицу частных производных на размер пакета для накопления ошибок в усредненном виде
+        divided_error_grad = grad_error_by_act_in / batch_size
+        # Матрица частных производных функции потерь по элементам входной матрицы
+        grad_by_prev_layer = np.zeros_like(inputs)
+        # Матрица частных производных функции потерь по элементам ядер свёртки
+        self.kernels_der.fill(0)
+        for batch, channel, kernel in np.ndindex(inputs.shape[0], inputs.shape[-1], self.kernels_number):
+            pass
+        # Проведем изменение коэффициентов
+        self.kernels = self.optimizer(self.kernels, self.kernels_der)
+        return grad_by_prev_layer

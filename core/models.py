@@ -77,10 +77,10 @@ class MNISTDenseClassifier(Classifier):
         losses = np.empty((epoch, fit_size // batch_size), dtype=np.float32)  #  накопитель значения функции потерь по пакетам на эпохах обучения
         print("By epoch progress")
         for e in range(epoch): # итерации по эпохам
-            print(f"\n\nIter {e+1}")
+            print(f"Epoch {e+1}")
             order = np.arange(epoch_size)
             np.random.shuffle(order) # перемещаем элементы обучающей выборки
-            for i, start in tqdm(enumerate(range(0, fit_size, batch_size))):  # итерируемся по пакетам
+            for i, start in tqdm(enumerate(range(0, fit_size, batch_size)), total=fit_size // batch_size):  # итерируемся по пакетам
                 a_layers_inputs = [] # накопитель значений входов слоев сети (batch_size, n_layers + 1, layer_size)
                 stop = start + batch_size 
                 batch_indxs = order[start: stop]

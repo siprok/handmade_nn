@@ -1,6 +1,5 @@
 import numpy as np
 from abc import ABC, abstractmethod
-from numba import njit
 
 
 class Loss(ABC):

@@ -68,7 +68,7 @@ class RMSProp(OptimizerWithState):
     
     def optimize(self, weights_matrix: np.ndarray, error_der_matrix: np.ndarray):
         assert np.array_equal(weights_matrix.shape, error_der_matrix.shape)
-        self.accum += self.m * self.accum + (1 - self.m) * np.power(error_der_matrix, 2)
+        self.accum = self.m * self.accum + (1 - self.m) * np.power(error_der_matrix, 2)
         return weights_matrix - error_der_matrix * self.lr / (np.sqrt(self.accum) + self.eps)
          
     def reboot(self):
