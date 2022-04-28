@@ -319,7 +319,7 @@ class Conv2D(Layer):
         Обновить веса и вернуть матрицу частных производных по матрице входных значений
         :params inputs: np.ndarray (batch_size, rows, columns, channels)
             Матрица входных значений, полученная во время прямого распространения
-        :params error_grad_mat: np.ndarray (batch_size, rows, columns, channels * filters)
+        :params error_grad_mat: np.ndarray (batch_size, rows, columns, filters)
             Матрица частных производных функции потерь по элементам выхода
         """
         batch_size = inputs.shape[0]
@@ -333,14 +333,31 @@ class Conv2D(Layer):
         divided_inputs[:, rows_radius: -rows_radius, cols_radius: -cols_radius, :] = inputs / batch_size
         # Найдем градиент ошибки по входам функции активации
         grad_error_by_act_in = self.activation.error_back_prop(outputs, error_grad_mat)
-        # Разделим матрицу частных производных на размер пакета для накопления ошибок в усредненном виде
-        divided_error_grad = grad_error_by_act_in / batch_size
         # Матрица частных производных функции потерь по элементам входной матрицы
         grad_by_prev_layer = np.zeros_like(inputs)
+        for batch, channel, kernel in np.ndindex(inputs.shape[0], inputs.shape[-1], self.kernels_number):
+            grad_by_prev_layer[batch, :, :, channel] = correlate(
+                grad_error_by_act_in[batch, :, :, kernel],
+                np.flip(self.kernels[kernel, :, :, channel], axis=(1,2)),
+                mode="constant",
+                cval=0
+            )
         # Матрица частных производных функции потерь по элементам ядер свёртки
         self.kernels_der.fill(0)
         for batch, channel, kernel in np.ndindex(inputs.shape[0], inputs.shape[-1], self.kernels_number):
-            pass
-        # Проведем изменение коэффициентов
+            for row, col in np.ndindex(*self.kernel_shape):
+                stop_row = wided_rows - (self.kernel_shape[0] - (row + 1))
+                stop_col = wided_cols - (self.kernel_shape[1] - (col + 1))
+                self.kernels_der[kernel, row, col, channel] = (
+                    divided_inputs[batch, row: stop_row, col: stop_col, channel]
+                     * grad_error_by_act_in[batch, :, :, kernel]
+                ).sum()
+        # Матрица частных произвдных функции потерь по смещениям сверток для результатов сверток
+        self.biases_der.fill(0)
+        for kernel in range(self.kernels_number):
+            self.biases_der[kernel, :, :, :] = grad_error_by_act_in[:, :, :, kernel].sum()
+        # Проведем обнвление коэффициентов ядер
         self.kernels = self.optimizer(self.kernels, self.kernels_der)
+        # Проведём обновление вектора смещений
+        self.biases = self.optimizer(self.biases, self.biases_der)
         return grad_by_prev_layer
