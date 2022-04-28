@@ -1,5 +1,6 @@
 import numpy as np
 from abc import ABC, abstractmethod
+import pdb
 
     
 class Optimizer(ABC):
@@ -76,7 +77,11 @@ class RMSProp(OptimizerWithState):
 
 
 class Adam(OptimizerWithState):
-    def __init__(self, learning_rate: np.float32, momentum_1: np.float32 = 0.9, momentum_2: np.float32 = 0.9, epsilon: np.float32 = 10**(-8)):
+    def __init__(self,
+                 learning_rate: np.float32,
+                 momentum_1: np.float32 = 0.9, 
+                 momentum_2: np.float32 = 0.9, 
+                 epsilon: np.float32 = 10**(-8)):
         assert epsilon * learning_rate > 0
         assert 0 < momentum_1 and momentum_1 < 1 
         assert 0 < momentum_2 and momentum_2 < 1 

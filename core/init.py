@@ -22,12 +22,13 @@ from .layers import (
     BatchNormalizer,
     Flatten,
     MaxPool1D,
-    MaxPool2D
+    MaxPool2D,
+    Conv2D
 )
 
 from .models import (
     Model,
-    MNISTDenseClassifier
+    DenseClassifier
 )
 
 from .metrics import (
@@ -53,7 +54,7 @@ __all__ = (
     Initializer,
     MaxPool1D,
     MaxPool2D,
-    MNISTDenseClassifier,
+    DenseClassifier,
     Metric,
     Model,
     Layer,
