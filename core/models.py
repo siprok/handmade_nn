@@ -4,8 +4,8 @@ from typing import Tuple, Sequence, Iterable
 from abc import ABC, abstractmethod
 from .optimizers import Optimizer
 from .layers import Dense, BatchNormalizer, Conv2D, Flatten, MaxPool1D, MaxPool2D
-from .initializers import Xavier
-from .activations import Softmax
+from .initializers import Xavier, He
+from .activations import Softmax, ReLu
 from .optimizers import Adam
 from .losses import Loss
 from .metrics import Metric
@@ -146,26 +146,42 @@ class CNNClassifier(Classifier):
                     optimizer=deepcopy(optimizer)
                 )
         )
-        # self.layers.append(
-        #     MaxPool2D(
-        #         pool_sizes=(2,2),
-        #         strides=(2,2),
-        #         axes=(1,2)
-        #     )
-        # )
+        self.layers.append(
+            MaxPool2D(
+                pool_sizes=(2,2),
+                strides=(2,2),
+                axes=(1,2)
+            )
+        )
         self.layers.append(
             Flatten()
         )
         self.layers.append(
                     BatchNormalizer(
-                        size=28*28*6,
+                        size=14*14*6,
                         optimizer=deepcopy(optimizer)
                     )
                 )
         self.layers.append(
             Dense(
+                 size=32,
+                 prev_size=14*14*6,
+                 next_size=10,
+                 initializer_class=He,
+                 activation_class=ReLu,
+                 optimizer=deepcopy(optimizer)
+            )
+        )
+        self.layers.append(
+            BatchNormalizer(
+                size=32,
+                optimizer=deepcopy(optimizer)
+            )
+        )
+        self.layers.append(
+            Dense(
                  size=10,
-                 prev_size=28*28*6,
+                 prev_size=32,
                  next_size=0,
                  initializer_class=Xavier,
                  activation_class=Softmax,
@@ -184,7 +200,8 @@ class CNNClassifier(Classifier):
             val_part: np.float32 = 0.2,):
         assert val_part < 1
         epoch_size = train_targets.shape[0]  # количество элементов из обучающей выборки наодной эпохе обучения
-        fit_size = int((1 - val_part) * train_targets.shape[0])
+        fit_size = np.floor((1 - val_part) * train_targets.shape[0]).astype(int)
+        print(fit_size, batch_size)
         losses = np.empty((epoch, fit_size // batch_size), dtype=np.float32)  #  накопитель значения функции потерь по пакетам на эпохах обучения
         print("By epoch progress")
         for e in range(epoch): # итерации по эпохам
@@ -228,10 +245,19 @@ class CNNClassifier(Classifier):
         return losses
     
     def predict_proba(self, test_samples: np.ndarray) -> np.ndarray:
-        output = test_samples
-        for layer in self.layers: # распространение вперёд
-            output = layer.forward(output)
-        return output
+        result = np.zeros((test_samples.shape[0], self.layers[-1].size))
+        for start in tqdm(range(0, result.shape[0], 64)):
+            stop = start + 64
+            output = test_samples[start: stop]
+            for layer in self.layers: # распространение вперёд
+                output = layer.forward(output)
+            result[start: stop] = output
+        if stop + 1 < result.shape[0]:
+            output = test_samples[stop:]
+            for layer in self.layers: # распространение вперёд
+                output = layer.forward(output)
+            result[stop:] = output
+        return result
 
     def predict(self, test_samples: np.ndarray) -> np.ndarray:
         return np.argmax(self.predict_proba(test_samples), axis=1, keepdims=True)
